@@ -1,17 +1,17 @@
 'use strict';
 
 require('dotenv').config();
-const tmi  = require('tmi.js');
+const tmi = require('tmi.js');
 const pool = require('../db/pool');
 
-const { checkEnv }              = require('../scripts/checkEnv');
+const { checkEnv } = require('../scripts/checkEnv');
 const { loadBlacklist, isBlacklisted } = require('../safety/blacklist');
-const { initTokens, getToken }  = require('../config/tokenManager');
-const { checkRateLimit }        = require('../safety/rateLimiter');
-const watchdog                  = require('../safety/watchdog');
+const { initTokens, getToken } = require('../config/tokenManager');
+const { checkRateLimit } = require('../safety/rateLimiter');
+const watchdog = require('../safety/watchdog');
 const { startWebSocketServer, emit } = require('../websocket/server');
 const { startPolling, resetSession } = require('./pollers');
-const { shouldReply }           = require('./replyDecision');
+const { shouldReply } = require('./replyDecision');
 const { getActiveConversation, updateConversation } = require('./continuity');
 const { startFavoritesRotation } = require('./favorites');
 const {
@@ -31,9 +31,9 @@ const {
 const { setCooldown } = require('../safety/cooldowns');
 const { getUserInfo, getStreamInfo } = require('../api/twitch');
 
-const CHANNEL         = process.env.CHANNEL;
-const BOT_USERNAME    = process.env.BOT_USERNAME;
-const MAIN_USERNAME   = process.env.MAIN_USERNAME;
+const CHANNEL = process.env.CHANNEL;
+const BOT_USERNAME = process.env.BOT_USERNAME;
+const MAIN_USERNAME = process.env.MAIN_USERNAME;
 const MAX_NEW_VIEWERS = parseInt(process.env.MAX_NEW_VIEWERS_PER_SESSION || '100', 10);
 
 const IGNORED_BOTS = new Set([
@@ -42,15 +42,15 @@ const IGNORED_BOTS = new Set([
   'botisimo', 'phantombot',
 ]);
 
-let sessionId        = null;
-let broadcasterId    = null;
-let botUserId        = null;
-let newViewerCount   = 0;
-let pollingHandle    = null;
-let favoritesHandle  = null;
+let sessionId = null;
+let broadcasterId = null;
+let botUserId = null;
+let newViewerCount = 0;
+let pollingHandle = null;
+let favoritesHandle = null;
 
 /** @type {import('tmi.js').Client} Read-only bot client */
-let botClient  = null;
+let botClient = null;
 /** @type {import('tmi.js').Client} Write-only main client */
 let mainClient = null;
 
@@ -122,8 +122,8 @@ async function handleModCommand(command, username, target, tags) {
   if (command === '!so' && target) {
     try {
       const targetUser = await getUserInfo(target, 'login', sessionId);
-      const lastGame   = targetUser ? await require('../api/twitch').getLastGame(targetUser.id, sessionId) : null;
-      const shoutout   = await generateShoutout(target, lastGame, sessionId);
+      const lastGame = targetUser ? await require('../api/twitch').getLastGame(targetUser.id, sessionId) : null;
+      const shoutout = await generateShoutout(target, lastGame, sessionId);
       if (shoutout) await sendMessage(shoutout, 'shoutout', target);
     } catch (err) {
       console.error('[bot] !so error:', err.message);
@@ -164,7 +164,7 @@ async function onMessage(channel, tags, message, self) {
   const emoteOnly = tags['emote-only'];
 
   // Mod commands
-  const parts  = message.trim().split(/\s+/);
+  const parts = message.trim().split(/\s+/);
   const command = parts[0].toLowerCase();
   const cmdTarget = parts[1] || null;
   const handled = await handleModCommand(command, username, cmdTarget, tags);
@@ -270,7 +270,7 @@ async function onMessage(channel, tags, message, self) {
             await sendMessage(reply, 'reply', username);
             await updateConversation(viewerId, sessionId, message, reply);
             if (!decision.isContinuation) {
-              await setCooldown('chat_reply', username, 90_000);
+              await setCooldown('chat_reply', username, 20 * 60 * 1000);
             }
           }
         }
@@ -302,17 +302,17 @@ async function onMessage(channel, tags, message, self) {
   if (!emoteOnly) {
     const decision = await shouldReply(message, username, viewerId, CHANNEL, sessionId);
     if (decision.shouldReply) {
-      const convo   = await getActiveConversation(viewerId, sessionId);
+      const convo = await getActiveConversation(viewerId, sessionId);
       const history = convo?.messages || [];
-      const reply   = await generateReply(username, message, history, sessionId);
+      const reply = await generateReply(username, message, history, sessionId);
       if (reply) {
         await sendMessage(reply, 'reply', username);
         await updateConversation(viewerId, sessionId, message, reply);
         if (!decision.isContinuation) {
-          await setCooldown('chat_reply', username, 90_000);
+          await setCooldown('chat_reply', username, 20 * 60 * 1000);
         }
         // Non-blocking realness score recalculation
-        calculateRealness(viewerId, sessionId).catch(() => {});
+        calculateRealness(viewerId, sessionId).catch(() => { });
       }
     }
   }
@@ -336,7 +336,7 @@ async function start() {
 
   console.log('[4/9] Initializing OAuth tokens...');
   await initTokens();
-  const botToken  = await getToken('bot');
+  const botToken = await getToken('bot');
   const mainToken = await getToken('main');
 
   console.log('[5/9] Starting session in database...');
@@ -359,17 +359,17 @@ async function start() {
   console.log('[7/9] Connecting clients...');
 
   botClient = new tmi.Client({
-    options:    { debug: false },
+    options: { debug: false },
     connection: { reconnect: true, secure: true },
-    identity:   { username: BOT_USERNAME,  password: `oauth:${botToken.access_token}` },
-    channels:   [CHANNEL],
+    identity: { username: BOT_USERNAME, password: `oauth:${botToken.access_token}` },
+    channels: [CHANNEL],
   });
 
   mainClient = new tmi.Client({
-    options:    { debug: false },
+    options: { debug: false },
     connection: { reconnect: true, secure: true },
-    identity:   { username: MAIN_USERNAME, password: `oauth:${mainToken.access_token}` },
-    channels:   [CHANNEL],
+    identity: { username: MAIN_USERNAME, password: `oauth:${mainToken.access_token}` },
+    channels: [CHANNEL],
   });
 
   // BOT client: reads only, never posts
@@ -402,7 +402,7 @@ async function shutdown(signal) {
   console.log(`\n[bot] Received ${signal}. Shutting down gracefully...`);
 
   try {
-    if (pollingHandle)   clearInterval(pollingHandle);
+    if (pollingHandle) clearInterval(pollingHandle);
     if (favoritesHandle) clearTimeout(favoritesHandle);
 
     if (sessionId) {
@@ -413,8 +413,8 @@ async function shutdown(signal) {
       console.log(`[bot] Session #${sessionId} closed.`);
     }
 
-    if (botClient)  await botClient.disconnect().catch(() => {});
-    if (mainClient) await mainClient.disconnect().catch(() => {});
+    if (botClient) await botClient.disconnect().catch(() => { });
+    if (mainClient) await mainClient.disconnect().catch(() => { });
 
     await pool.end();
     console.log('[bot] Shutdown complete.');
@@ -423,7 +423,7 @@ async function shutdown(signal) {
   }
 }
 
-process.on('SIGINT',  () => shutdown('SIGINT').then(() => process.exit(0)));
+process.on('SIGINT', () => shutdown('SIGINT').then(() => process.exit(0)));
 process.on('SIGTERM', () => shutdown('SIGTERM').then(() => process.exit(0)));
 process.on('unhandledRejection', (reason) => {
   console.error('[bot] Unhandled rejection:', reason);

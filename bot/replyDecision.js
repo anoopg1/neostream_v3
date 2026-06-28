@@ -56,20 +56,20 @@ async function shouldReply(message, username, viewerId, channel, sessionId) {
       console.error('[replyDecision] Step 1 error:', err.message);
     }
 
-    // Step 2 — Chat velocity check
-    try {
-      const velocityResult = await pool.query(
-        `SELECT COUNT(*) AS cnt FROM logs
-         WHERE channel = $1 AND sent_at > NOW() - INTERVAL '1 minute'`,
-        [channel],
-      );
-      const chatCount = parseInt(velocityResult.rows[0].cnt, 10);
-      if (chatCount >= 5 && Math.random() < 0.7) {
-        return { shouldReply: false, reason: 'high_velocity' };
-      }
-    } catch (err) {
-      console.error('[replyDecision] Step 2 error:', err.message);
-    }
+   // Step 2 — Chat velocity check
+try {
+  const velocityResult = await pool.query(
+    `SELECT COUNT(*) AS cnt FROM viewer_messages
+     WHERE session_id = $1 AND sent_at > NOW() - INTERVAL '1 minute'`,
+    [sessionId],
+  );
+  const chatCount = parseInt(velocityResult.rows[0].cnt, 10);
+  if (chatCount >= 5 && Math.random() < 0.7) {
+    return { shouldReply: false, reason: 'high_velocity' };
+  }
+} catch (err) {
+  console.error('[replyDecision] Step 2 error:', err.message);
+}
 
     // Step 3 — Per-user rate limit (max 5 messages per minute)
     try {
