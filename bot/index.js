@@ -150,10 +150,11 @@ async function onMessage(channel, tags, message, self) {
 
   // Validate source room
   const roomId = tags['room-id'];
-  if (roomId !== broadcasterId) return;
+  if (roomId !== String(broadcasterId)) return;
 
   const username = (tags.username || '').toLowerCase();
   const viewerId = tags['user-id'];
+  console.log('[bot] onMessage triggered:', username, message.slice(0, 50));
 
   if (!username || !viewerId) return;
   if (IGNORED_BOTS.has(username)) return;

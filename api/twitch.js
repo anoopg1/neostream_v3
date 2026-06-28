@@ -28,11 +28,11 @@ async function logTwitchCall(endpoint, success, sessionId) {
 
 /**
  * Creates authenticated Axios headers for the Twitch Helix API.
- * Refreshes the bot token if it is near expiry.
+ * @param {'bot'|'main'} tokenType - Which OAuth token to use.
  * @returns {Promise<{ Authorization: string, 'Client-Id': string }>}
  */
-async function getHeaders() {
-  const token = await refreshTokenIfNeeded('bot');
+async function getHeaders(tokenType = 'bot') {
+  const token = await refreshTokenIfNeeded(tokenType);
   return {
     Authorization: `Bearer ${token}`,
     'Client-Id':   process.env.TWITCH_CLIENT_ID,
@@ -47,13 +47,13 @@ async function getHeaders() {
  * @param {number|null} sessionId  - For cost logging.
  * @returns {Promise<object|null>} Parsed response data or null.
  */
-async function twitchGet(endpoint, params, sessionId) {
+async function twitchGet(endpoint, params, sessionId, tokenType = 'bot') {
   let retries = 0;
   const maxRetries = 3;
 
   while (retries < maxRetries) {
     try {
-      const headers = await getHeaders();
+      const headers = await getHeaders(tokenType);
       const response = await axios.get(`${TWITCH_API_BASE}${endpoint}`, {
         headers,
         params,
@@ -256,7 +256,7 @@ async function getFollowing(userId, sessionId) {
       const params = { user_id: userId, first: 100 };
       if (cursor) params.after = cursor;
 
-      const data = await twitchGet('/channels/followed', params, sessionId);
+      const data = await twitchGet('/channels/followed', params, sessionId, 'main');
       if (!data) break;
 
       results.push(...(data.data || []));

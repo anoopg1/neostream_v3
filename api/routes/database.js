@@ -19,12 +19,11 @@ router.get('/stats', async (_req, res) => {
   try {
     const result = await pool.query(
       `SELECT
-         schemaname,
-         tablename,
+         relname AS table_name,
          n_live_tup AS row_count,
-         pg_size_pretty(pg_total_relation_size(schemaname || '.' || tablename)) AS total_size
+         pg_size_pretty(pg_total_relation_size(relid)) AS size
        FROM pg_stat_user_tables
-       ORDER BY n_live_tup DESC`,
+       ORDER BY relname`,
     );
     res.json({ tables: result.rows });
   } catch (err) {

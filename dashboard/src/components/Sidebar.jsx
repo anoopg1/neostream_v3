@@ -99,7 +99,6 @@ export default function Sidebar() {
           alignItems: 'center',
           justifyContent: 'center',
           padding: '12px 20px',
-          borderTop: '1px solid var(--border)',
           background: 'none',
           border: 'none',
           borderTop: '1px solid var(--border)',
