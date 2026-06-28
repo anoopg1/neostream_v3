@@ -13,13 +13,35 @@ const { classifyMessage } = require('../ai/claude');
  * @returns {number} Overlap ratio between 0 and 1.
  */
 function wordOverlap(a, b) {
-  const wordsA = new Set(a.toLowerCase().split(/\s+/).filter(Boolean));
-  const wordsB = new Set(b.toLowerCase().split(/\s+/).filter(Boolean));
+  const STOP_WORDS = new Set([
+    'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been',
+    'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would',
+    'could', 'should', 'may', 'might', 'shall', 'can', 'to', 'of',
+    'in', 'on', 'at', 'by', 'for', 'with', 'about', 'as', 'into',
+    'through', 'and', 'or', 'but', 'if', 'so', 'yet', 'nor',
+    'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him',
+    'her', 'us', 'them', 'my', 'your', 'his', 'its', 'our', 'their',
+    'this', 'that', 'these', 'those', 'what', 'which', 'who', 'how',
+    'all', 'just', 'not', 'no', 'so', 'up', 'out', 'get', 'go',
+    'lol', 'lmao', 'omg', 'haha', 'oh', 'ah', 'uh', 'ok', 'okay',
+  ]);
+
+  const tokenize = (str) =>
+    str.toLowerCase()
+      .split(/\s+/)
+      .map((w) => w.replace(/[^a-z0-9]/g, ''))
+      .filter((w) => w.length > 2 && !STOP_WORDS.has(w));
+
+  const wordsA = new Set(tokenize(a));
+  const wordsB = new Set(tokenize(b));
+
   if (wordsA.size === 0 || wordsB.size === 0) return 0;
+
   let shared = 0;
   for (const word of wordsA) {
     if (wordsB.has(word)) shared++;
   }
+
   return shared / Math.max(wordsA.size, wordsB.size);
 }
 
@@ -48,7 +70,7 @@ async function shouldReply(message, username, viewerId, channel, sessionId) {
         [viewerId],
       );
       for (const row of recentMsgs.rows) {
-        if (wordOverlap(message, row.message) > 0.8) {
+        if (wordOverlap(message, row.message) > 0.9) {
           console.log('[replyDecision]', username, 'blocked at step 1: repeat message');
           return { shouldReply: false, reason: 'repeat' };
         }
