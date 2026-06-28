@@ -1,0 +1,32 @@
+{
+  "name": "neostream_v3",
+  "version": "3.0.0",
+  "description": "Professional Twitch stream automation and analytics platform for neogrit",
+  "main": "scripts/start.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node scripts/start.js",
+    "start:bot": "node bot/index.js",
+    "start:api": "node api/index.js",
+    "start:dashboard": "cd dashboard && npm run dev",
+    "setup:db": "node scripts/setupDb.js",
+    "token:bot": "node scripts/getToken.js bot",
+    "token:main": "node scripts/getToken.js main",
+    "check:env": "node scripts/checkEnv.js"
+  },
+  "dependencies": {
+    "tmi.js": "^1.8.5",
+    "axios": "^1.6.0",
+    "pg": "^8.11.3",
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "ws": "^8.14.2"
+  },
+  "author": "neogrit",
+  "license": "UNLICENSED",
+  "private": true
+}
