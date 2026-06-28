@@ -40,6 +40,8 @@ const IGNORED_BOTS = new Set([
   'nightbot', 'streamelements', 'streamlabs', 'fossabot',
   'moobot', 'wizebot', 'coebot', 'deepbot', 'ohbot',
   'botisimo', 'phantombot',
+  (process.env.BOT_USERNAME || '').toLowerCase(),
+  (process.env.MAIN_USERNAME || '').toLowerCase(),
 ]);
 
 let sessionId = null;
@@ -154,11 +156,11 @@ async function onMessage(channel, tags, message, self) {
 
   const username = (tags.username || '').toLowerCase();
   const viewerId = tags['user-id'];
-  console.log('[bot] onMessage triggered:', username, message.slice(0, 50));
 
   if (!username || !viewerId) return;
+  if (username === (process.env.BOT_USERNAME || '').toLowerCase()) return;
+  if (username === (process.env.MAIN_USERNAME || '').toLowerCase()) return;
   if (IGNORED_BOTS.has(username)) return;
-  if (username === BOT_USERNAME || username === MAIN_USERNAME) return;
   if (watchdog.isKilled()) return;
 
   // Emote-only messages — skip reply logic but still track

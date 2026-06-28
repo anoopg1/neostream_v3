@@ -49,6 +49,7 @@ async function shouldReply(message, username, viewerId, channel, sessionId) {
       );
       for (const row of recentMsgs.rows) {
         if (wordOverlap(message, row.message) > 0.8) {
+          console.log('[replyDecision]', username, 'blocked at step 1: repeat message');
           return { shouldReply: false, reason: 'repeat' };
         }
       }
@@ -65,6 +66,7 @@ try {
   );
   const chatCount = parseInt(velocityResult.rows[0].cnt, 10);
   if (chatCount >= 5 && Math.random() < 0.7) {
+    console.log('[replyDecision]', username, 'blocked at step 2: high velocity');
     return { shouldReply: false, reason: 'high_velocity' };
   }
 } catch (err) {
@@ -80,14 +82,16 @@ try {
       );
       const userMsgCount = parseInt(userRateResult.rows[0].cnt, 10);
       if (userMsgCount >= 5) {
+        console.log('[replyDecision]', username, 'blocked at step 3: user rate limit');
         return { shouldReply: false, reason: 'user_rate_limit' };
       }
     } catch (err) {
       console.error('[replyDecision] Step 3 error:', err.message);
     }
 
-    // Step 4 — Cooldown check (bypassed for active conversation continuations)
+    // Step 4 — Cooldown check with continuation bypass
     try {
+      // Check for active conversation thread
       const activeConvo = await pool.query(
         `SELECT id FROM conversations
          WHERE viewer_id = $1
@@ -97,12 +101,38 @@ try {
          LIMIT 1`,
         [viewerId, sessionId],
       );
-
       const hasActiveConvo = activeConvo.rows.length > 0;
 
-      if (!hasActiveConvo) {
+      // Check if bot sent a welcome to this user recently (within 5 min)
+      const recentWelcome = await pool.query(
+        `SELECT 1 FROM logs
+         WHERE recipient = $1
+           AND type = 'welcome'
+           AND session_id = $2
+           AND sent_at > NOW() - INTERVAL '5 minutes'
+         LIMIT 1`,
+        [username, sessionId],
+      );
+      const hasRecentWelcome = recentWelcome.rows.length > 0;
+
+      // Check if bot sent any reply to this user recently (within 5 min)
+      const recentReply = await pool.query(
+        `SELECT 1 FROM logs
+         WHERE recipient = $1
+           AND type = 'reply'
+           AND session_id = $2
+           AND sent_at > NOW() - INTERVAL '5 minutes'
+         LIMIT 1`,
+        [username, sessionId],
+      );
+      const hasRecentReply = recentReply.rows.length > 0;
+
+      const isContinuation = hasActiveConvo || hasRecentWelcome || hasRecentReply;
+
+      if (!isContinuation) {
         const { allowed } = await checkCooldown('chat_reply', username);
         if (!allowed) {
+          console.log('[replyDecision]', username, 'blocked at step 4: cooldown');
           return { shouldReply: false, reason: 'cooldown' };
         }
       }
@@ -113,21 +143,25 @@ try {
     // Step 5 — Poison check
     const { safe, reason: poisonReason } = await checkPoison(message, viewerId);
     if (!safe) {
+      console.log('[replyDecision]', username, 'blocked at step 5: poison -', poisonReason);
       return { shouldReply: false, reason: `poison_${poisonReason}` };
     }
 
     // Step 6 — Ignored user check
     const ignored = await isUserIgnored(viewerId);
     if (ignored) {
+      console.log('[replyDecision]', username, 'blocked at step 6: user ignored');
       return { shouldReply: false, reason: 'ignored' };
     }
 
     // Step 7 — Message classification via Claude
     const classification = await classifyMessage(message);
     if (!classification || !classification.needsReply) {
+      console.log('[replyDecision]', username, 'blocked at step 7: classifier says no reply needed');
       return { shouldReply: false, reason: 'no_response_needed' };
     }
 
+    console.log('[replyDecision]', username, 'REPLY APPROVED');
     return {
       shouldReply:    true,
       reason:         'ok',
