@@ -65,9 +65,10 @@ async function shouldReply(message, username, viewerId, channel, sessionId) {
       const recentMsgs = await pool.query(
         `SELECT message FROM viewer_messages
          WHERE viewer_id = $1
+           AND session_id = $2
          ORDER BY sent_at DESC
          LIMIT 5`,
-        [viewerId],
+        [viewerId, sessionId],
       );
       for (const row of recentMsgs.rows) {
         if (wordOverlap(message, row.message) > 0.9) {
