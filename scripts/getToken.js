@@ -16,6 +16,7 @@ const SCOPES = [
   'moderator:read:chatters',
   'channel:read:subscriptions',
   'moderator:read:followers',
+  'user:read:follows',
 ].join(' ');
 
 /**

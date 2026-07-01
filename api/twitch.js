@@ -2,7 +2,7 @@
 
 require('dotenv').config();
 const axios = require('axios');
-const db = require('../db');
+const db = require('../db/pool');
 const { getValidToken } = require('../config/tokenManager');
 
 const TWITCH_API_BASE = 'https://api.twitch.tv/helix';
