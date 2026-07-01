@@ -23,10 +23,9 @@ const INJECTION_PATTERNS = [
 ];
 
 const REPEAT_COMMAND_PATTERNS = [
-  /^say\s+/i,
-  /^type\s+/i,
-  /^write\s+/i,
-  /^repeat\s+/i,
+  /^say\s+.{20,}/i,                           // only flag substantial "say ..." content
+  /^(type|repeat)\s+/i,
+  /^write\s+(this|the|that|it)\b/i,           // "write this down" style injection
   /tell\s+everyone/i,
   /announce\s+that/i,
 ];
@@ -78,11 +77,12 @@ const RELIGIOUS_PROVOCATIONS = [
 /**
  * Runs all poison pattern checks against a raw chat message.
  * Escalates ignore timeouts on repeat offenders using the flagged_users table.
- * @param {string} message  - Raw chat message content.
- * @param {string} viewerId - Twitch user ID of the sender.
+ * @param {string} message   - Raw chat message content.
+ * @param {string} viewerId  - Twitch user ID of the sender.
+ * @param {string} [username] - Twitch login name (for readable flagged_users records).
  * @returns {Promise<{ safe: boolean, reason: string|null }>}
  */
-async function checkPoison(message, viewerId) {
+async function checkPoison(message, viewerId, username) {
   let detectedReason = null;
 
   for (const pattern of INJECTION_PATTERNS) {
@@ -135,7 +135,7 @@ async function checkPoison(message, viewerId) {
         `INSERT INTO flagged_users (twitch_id, username, flag_count, last_flagged_at, ignore_until, reason)
          VALUES ($1, $2, 1, NOW(), $3, $4)
          ON CONFLICT (twitch_id) DO NOTHING`,
-        [viewerId, viewerId, ignoreUntil, detectedReason],
+        [viewerId, username || viewerId, ignoreUntil, detectedReason],
       );
     } else {
       const { flag_count } = existing.rows[0];

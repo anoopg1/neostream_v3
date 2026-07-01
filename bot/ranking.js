@@ -114,11 +114,10 @@ async function calculateRealness(viewerId, sessionId) {
       if (ageDays > 90)  score += 10;
       if (ageDays > 365) score += 5;
 
-      // Positive — responded to welcome (engaged in conversation)
+      // Positive — responded to bot (engaged in conversation this session)
       const respondedResult = await pool.query(
-        `SELECT 1 FROM conversation_messages cm
-         JOIN conversations c ON c.id = cm.conversation_id
-         WHERE c.viewer_id = $1 AND c.session_id = $2 AND cm.role = 'user'
+        `SELECT 1 FROM conversation_history
+         WHERE viewer_id = $1 AND session_id = $2
          LIMIT 1`,
         [viewerId, sessionId],
       );

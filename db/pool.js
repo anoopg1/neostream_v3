@@ -1,5 +1,4 @@
 'use strict';
-
 require('dotenv').config();
 const { Pool } = require('pg');
 
@@ -17,5 +16,15 @@ const pool = new Pool({
 pool.on('error', (err) => {
   console.error('[db/pool] Unexpected pool error:', err.message);
 });
+
+// Test connection on startup
+pool.query('SELECT current_database(), current_schema(), COUNT(*) as conversation_history_count FROM conversation_history')
+  .then(res => {
+    console.log(`[db/pool] Connected to ${res.rows[0].current_database} / ${res.rows[0].current_schema}`);
+    console.log(`[db/pool] conversation_history has ${res.rows[0].conversation_history_count} rows`);
+  })
+  .catch(err => {
+    console.error('[db/pool] Connection test failed:', err.message);
+  });
 
 module.exports = pool;

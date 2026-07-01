@@ -44,7 +44,7 @@ async function twitchGet(endpoint, params = {}, tokenType = 'bot') {
         timeout: 10000,
       });
 
-      console.log(`[twitch] GET ${endpoint} ✅`);
+      console.debug(`[twitch] GET ${endpoint} ✅`);
       return response.data;
 
     } catch (err) {
@@ -294,9 +294,32 @@ async function getUserFollowing(userId) {
   }
 }
 
+/**
+ * Fetches live stream info by numeric user_id.
+ * Returns null if the channel is offline.
+ * @param {string} userId - Broadcaster's numeric Twitch user ID.
+ * @returns {Promise<{ title: string, game_name: string, viewer_count: number }|null>}
+ */
+async function getStreamInfo(userId) {
+  try {
+    const data = await twitchGet('/streams', { user_id: userId });
+    const stream = data?.data?.[0];
+    if (!stream) return null;
+    return {
+      title: stream.title,
+      game_name: stream.game_name,
+      viewer_count: stream.viewer_count,
+    };
+  } catch (err) {
+    console.error('[twitch] getStreamInfo error:', err.message);
+    return null;
+  }
+}
+
 module.exports = {
   getUserInfo,
   isUserLive,
+  getStreamInfo,
   getChatSettings,
   getChatters,
   getLastGame,

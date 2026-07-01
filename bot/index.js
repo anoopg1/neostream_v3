@@ -156,8 +156,8 @@ async function handleModCommand(command, username, target, tags) {
 
   if (command === '!so' && target) {
     try {
-      const targetUser = await getUserInfo(target, 'login', sessionId);
-      const lastGame = targetUser ? await getLastGame(targetUser.id, sessionId) : null;
+      const targetUser = await getUserInfo(target);
+      const lastGame = targetUser ? await getLastGame(targetUser.id) : null;
       const shoutout = await generateShoutout(target, lastGame, sessionId);
       if (shoutout) await sendMessage(shoutout, 'shoutout', target);
     } catch (err) {
@@ -194,10 +194,12 @@ async function handleReply(username, viewerId, message) {
     const reply = await generateReply(username, message, history, sessionId);
 
     if (reply) {
-      await sendMessage(reply, 'reply', username);
-      await updateConversation(viewerId, sessionId, message, reply);
-      if (!decision.isContinuation) {
-        await setCooldown('chat_reply', username, 20 * 60 * 1000);
+      const sent = await sendMessage(reply, 'reply', username);
+      if (sent) {
+        await updateConversation(viewerId, sessionId, message, reply);
+        if (!decision.isContinuation) {
+          await setCooldown('chat_reply', username, 20 * 60 * 1000);
+        }
       }
     }
   } catch (err) {
@@ -307,6 +309,10 @@ async function onMessage(channel, tags, message, self) {
         console.error('[bot] session_chatters insert failed:', err.message);
       }
 
+      // Count first message in session total (subsequent messages do this in their own branch)
+      pool.query('UPDATE sessions SET total_messages = total_messages + 1 WHERE id = $1', [sessionId])
+        .catch(() => {});
+
       // Check if first ever visit
       const priorSessions = await pool.query(
         'SELECT COUNT(*) AS cnt FROM session_chatters WHERE viewer_id = $1 AND session_id != $2',
@@ -406,11 +412,11 @@ async function start() {
     console.log(`      Session #${sessionId} started.`);
 
     console.log('[6/9] Fetching channel info...');
-    const channelUser = await getUserInfo(CHANNEL, 'login', sessionId);
+    const channelUser = await getUserInfo(CHANNEL);
     if (!channelUser) throw new Error(`Could not fetch user info for channel: ${CHANNEL}`);
     broadcasterId = channelUser.id;
 
-    const botUser = await getUserInfo(BOT_USERNAME, 'login', sessionId);
+    const botUser = await getUserInfo(BOT_USERNAME);
     if (!botUser) throw new Error(`Could not fetch user info for bot: ${BOT_USERNAME}`);
     botUserId = botUser.id;
     console.log(`      broadcaster_id=${broadcasterId}, bot_id=${botUserId}`);
@@ -440,7 +446,7 @@ async function start() {
 
     console.log('[8/9] Starting background services...');
     pollingHandle = startPolling(broadcasterId, botUserId, sessionId);
-    favoritesHandle = await startFavoritesRotation(sessionId);
+    favoritesHandle = await startFavoritesRotation(sessionId, sendMessage);
 
     console.log('[9/9] Starting WebSocket server...');
     startWebSocketServer();

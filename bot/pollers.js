@@ -20,18 +20,14 @@ async function detectClusters(newViewers, sessionId) {
   if (newViewers.length < 10) return;
 
   try {
-    const zeroHistory = [];
-
-    for (const viewer of newViewers) {
-      const result = await pool.query(
-        'SELECT COUNT(*) AS cnt FROM viewer_messages WHERE viewer_id = $1',
-        [viewer.user_id],
-      );
-      const count = parseInt(result.rows[0].cnt, 10);
-      if (count === 0) {
-        zeroHistory.push(viewer.user_id);
-      }
-    }
+    // Batch check: single query instead of N individual ones
+    const ids = newViewers.map(v => v.user_id);
+    const historyResult = await pool.query(
+      `SELECT DISTINCT viewer_id FROM viewer_messages WHERE viewer_id = ANY($1::text[])`,
+      [ids],
+    );
+    const withHistory = new Set(historyResult.rows.map(r => r.viewer_id));
+    const zeroHistory = ids.filter(id => !withHistory.has(id));
 
     if (zeroHistory.length < 8) return;
 

@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(Remove-Item \"c:\\\\Users\\\\anoop\\\\Desktop\\\\neostream_v3\\\\ai\\\\systemPrompt.js\")"
     ]
   }
 }

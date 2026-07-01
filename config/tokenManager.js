@@ -131,8 +131,10 @@ async function initTokens() {
   try {
     console.log('[tokenManager] Initializing OAuth tokens...');
 
-    const botExpiry = new Date(Date.now() + 4 * 60 * 60 * 1000); // 4 hours
-    const mainExpiry = new Date(Date.now() + 4 * 60 * 60 * 1000);
+    // Use 60 days so tokens seeded from .env don't trigger premature refreshes
+    // during normal streaming sessions. Actual Twitch token expiry is ~60 days.
+    const botExpiry  = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
+    const mainExpiry = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
 
     // Check if tokens already exist
     const botRow = await pool.query(

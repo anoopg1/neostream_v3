@@ -239,9 +239,10 @@ REPLY RULES:
 /**
  * Classifies if a message needs a bot reply.
  * @param {string} message
+ * @param {number|null} sessionId - Current session for cost attribution.
  * @returns {Promise<{needsReply: boolean, isQuestion: boolean, isContinuation: boolean}|null>}
  */
-async function classifyMessage(message) {
+async function classifyMessage(message, sessionId = null) {
   const classifySystem =
     'You are a Twitch ETS2 gaming stream chat classifier.\n' +
     'Reply with ONLY JSON, no explanation:\n' +
@@ -269,7 +270,7 @@ async function classifyMessage(message) {
     classifySystem,
     [{ role: 'user', content: message }],
     50,
-    null,
+    sessionId,
   );
 
   if (!raw) return null;

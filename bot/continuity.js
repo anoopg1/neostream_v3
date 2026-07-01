@@ -53,6 +53,18 @@ async function updateConversation(viewerId, sessionId, viewerMessage, botReply) 
        VALUES ($1, $2, $3, $4)`,
       [viewerId, sessionId, viewerMessage, botReply],
     );
+
+    // Keep conversations table in sync so the continuation bypass in
+    // replyDecision.js (step 2) can detect active threads via last_message_at.
+    await pool.query(
+      `INSERT INTO conversations (viewer_id, session_id, last_message_at, exchange_count)
+       VALUES ($1, $2, NOW(), 1)
+       ON CONFLICT (viewer_id, session_id) DO UPDATE
+         SET last_message_at = NOW(),
+             exchange_count  = conversations.exchange_count + 1,
+             is_active       = true`,
+      [viewerId, sessionId],
+    );
   } catch (err) {
     console.error('[continuity] updateConversation error:', err.message);
   }

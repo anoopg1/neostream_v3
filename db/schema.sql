@@ -139,3 +139,35 @@ CREATE TABLE IF NOT EXISTS viewer_messages (
   message             TEXT NOT NULL,
   sent_at             TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Flat exchange log used by continuity.js for conversation history
+CREATE TABLE IF NOT EXISTS conversation_history (
+  id             SERIAL PRIMARY KEY,
+  viewer_id      TEXT NOT NULL,
+  session_id     INT  NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  viewer_message TEXT NOT NULL,
+  bot_reply      TEXT NOT NULL,
+  created_at     TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for shouldReply velocity/repeat queries (called on every message)
+CREATE INDEX IF NOT EXISTS idx_convhist_viewer_session
+  ON conversation_history (viewer_id, session_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_viewer_messages_viewer_session
+  ON viewer_messages (viewer_id, session_id, sent_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_viewer_messages_session_time
+  ON viewer_messages (session_id, sent_at DESC);
+
+-- Unique constraint on conversations so continuity.js can ON CONFLICT upsert
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'uq_conversations_viewer_session'
+  ) THEN
+    ALTER TABLE conversations
+    ADD CONSTRAINT uq_conversations_viewer_session UNIQUE (viewer_id, session_id);
+  END IF;
+END $$;
