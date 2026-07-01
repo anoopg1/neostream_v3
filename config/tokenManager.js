@@ -25,6 +25,7 @@ async function storeToken(accountType, username, accessToken, refreshToken, expi
              expires_at    = EXCLUDED.expires_at`,
       [accountType, username, accessToken, refreshToken, expiresAt],
     );
+    console.log(`[tokenManager] Token stored for ${accountType}.`);
   } catch (err) {
     console.error(`[tokenManager] storeToken failed for ${accountType}:`, err.message);
     throw err;
@@ -33,9 +34,8 @@ async function storeToken(accountType, username, accessToken, refreshToken, expi
 
 /**
  * Retrieves the stored OAuth token record for an account type.
- * Throws if no token is found — callers must not receive null tokens.
  * @param {'bot'|'main'} accountType - Which account to retrieve.
- * @returns {Promise<{username: string, access_token: string, refresh_token: string, expires_at: Date}>}
+ * @returns {Promise<{username: string, access_token: string, refresh_token: string, expires_at: Date}|null>}
  */
 async function getToken(accountType) {
   try {
@@ -44,65 +44,82 @@ async function getToken(accountType) {
       [accountType],
     );
     if (result.rows.length === 0) {
-      throw new Error(`No token stored for account type: ${accountType}. Run npm run token:${accountType}`);
+      console.warn(`[tokenManager] No token found for ${accountType}. Regenerate via config/userAuth.js`);
+      return null;
     }
     return result.rows[0];
   } catch (err) {
     console.error(`[tokenManager] getToken failed for ${accountType}:`, err.message);
-    throw err;
+    return null;
   }
 }
 
 /**
- * Refreshes the access token for the given account if it is within 5 minutes of expiry.
- * Logs every refresh attempt to the api_calls table.
+ * Refreshes the access token for the given account if within 5 minutes of expiry.
+ * Updates environment variables AND database.
  * @param {'bot'|'main'} accountType - Account to refresh.
- * @returns {Promise<string>} The valid access token (refreshed or existing).
+ * @returns {Promise<string|null>} The valid access token or null if refresh failed.
  */
 async function refreshTokenIfNeeded(accountType) {
-  const record = await getToken(accountType);
-  const expiresAt = new Date(record.expires_at);
-  const fiveMinutes = 5 * 60 * 1000;
-  const callStart = Date.now();
-
-  if (expiresAt.getTime() - Date.now() > fiveMinutes) {
-    return record.access_token;
-  }
-
-  console.log(`[tokenManager] Refreshing token for ${accountType}...`);
-
-  let success = false;
   try {
+    const record = await getToken(accountType);
+    if (!record) {
+      console.error(`[tokenManager] Cannot refresh - no token found for ${accountType}`);
+      return null;
+    }
+
+    const expiresAt = new Date(record.expires_at);
+    const fiveMinutes = 5 * 60 * 1000;
+    const now = Date.now();
+
+    // Token still valid for more than 5 minutes
+    if (expiresAt.getTime() - now > fiveMinutes) {
+      return record.access_token;
+    }
+
+    console.log(`[tokenManager] Refreshing token for ${accountType}...`);
+
     const response = await axios.post('https://id.twitch.tv/oauth2/token', null, {
       params: {
-        client_id:     process.env.TWITCH_CLIENT_ID,
+        client_id: process.env.TWITCH_CLIENT_ID,
         client_secret: process.env.TWITCH_CLIENT_SECRET,
-        grant_type:    'refresh_token',
+        grant_type: 'refresh_token',
         refresh_token: record.refresh_token,
       },
     });
 
-    const { access_token, refresh_token, expires_in } = response.data;
-    const newExpiry = new Date(Date.now() + expires_in * 1000);
+    const newAccessToken = response.data.access_token;
+    const newRefreshToken = response.data.refresh_token;
+    const expiresIn = response.data.expires_in;
+    const newExpiry = new Date(now + expiresIn * 1000);
 
-    await storeToken(accountType, record.username, access_token, refresh_token, newExpiry);
-    success = true;
+    // Store in database
+    await storeToken(accountType, record.username, newAccessToken, newRefreshToken, newExpiry);
+
+    // Update environment variables for tmi.js
+    if (accountType === 'bot') {
+      process.env.BOT_OAUTH_TOKEN = newAccessToken;
+      process.env.BOT_REFRESH_TOKEN = newRefreshToken;
+    } else if (accountType === 'main') {
+      process.env.MAIN_OAUTH_TOKEN = newAccessToken;
+      process.env.MAIN_REFRESH_TOKEN = newRefreshToken;
+    }
+
     console.log(`[tokenManager] Token refreshed for ${accountType}.`);
-    return access_token;
+    return newAccessToken;
   } catch (err) {
     console.error(`[tokenManager] Token refresh failed for ${accountType}:`, err.message);
-    throw err;
-  } finally {
-    try {
-      await pool.query(
-        `INSERT INTO api_calls (service, endpoint, success, called_at)
-         VALUES ($1, $2, $3, NOW())`,
-        ['twitch', 'token_refresh:' + accountType, success],
-      );
-    } catch (logErr) {
-      console.error('[tokenManager] Failed to log refresh attempt:', logErr.message);
-    }
+    return null;
   }
+}
+
+/**
+ * Gets a valid token, refreshing if needed.
+ * @param {'bot'|'main'} accountType - Which account.
+ * @returns {Promise<string|null>} Valid access token or null.
+ */
+async function getValidToken(accountType) {
+  return await refreshTokenIfNeeded(accountType);
 }
 
 /**
@@ -112,13 +129,23 @@ async function refreshTokenIfNeeded(accountType) {
  */
 async function initTokens() {
   try {
-    const botExpiry  = new Date(Date.now() + 4 * 60 * 60 * 1000);
+    console.log('[tokenManager] Initializing OAuth tokens...');
+
+    const botExpiry = new Date(Date.now() + 4 * 60 * 60 * 1000); // 4 hours
     const mainExpiry = new Date(Date.now() + 4 * 60 * 60 * 1000);
 
-    const botRow  = await pool.query('SELECT 1 FROM oauth_tokens WHERE account_type = $1', ['bot']);
-    const mainRow = await pool.query('SELECT 1 FROM oauth_tokens WHERE account_type = $1', ['main']);
+    // Check if tokens already exist
+    const botRow = await pool.query(
+      'SELECT 1 FROM oauth_tokens WHERE account_type = $1',
+      ['bot'],
+    );
+    const mainRow = await pool.query(
+      'SELECT 1 FROM oauth_tokens WHERE account_type = $1',
+      ['main'],
+    );
 
-    if (botRow.rows.length === 0) {
+    // Seed bot token if not exists
+    if (botRow.rows.length === 0 && process.env.BOT_OAUTH_TOKEN) {
       await storeToken(
         'bot',
         process.env.BOT_USERNAME,
@@ -129,7 +156,8 @@ async function initTokens() {
       console.log('[tokenManager] Bot token seeded from environment.');
     }
 
-    if (mainRow.rows.length === 0) {
+    // Seed main token if not exists
+    if (mainRow.rows.length === 0 && process.env.MAIN_OAUTH_TOKEN) {
       await storeToken(
         'main',
         process.env.MAIN_USERNAME,
@@ -139,10 +167,22 @@ async function initTokens() {
       );
       console.log('[tokenManager] Main token seeded from environment.');
     }
+
+    // Refresh both tokens if needed
+    await refreshTokenIfNeeded('bot');
+    await refreshTokenIfNeeded('main');
+
+    console.log('[tokenManager] Tokens initialized and refreshed.');
   } catch (err) {
     console.error('[tokenManager] initTokens failed:', err.message);
     throw err;
   }
 }
 
-module.exports = { storeToken, getToken, refreshTokenIfNeeded, initTokens };
+module.exports = {
+  storeToken,
+  getToken,
+  refreshTokenIfNeeded,
+  getValidToken,
+  initTokens,
+};
