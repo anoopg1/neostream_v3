@@ -253,7 +253,9 @@ async function classifyMessage(message) {
     '- Conversational and expects response\n' +
     '- Comparisons ("scania vs volvo")\n' +
     '- Opinions/recommendations asked\n' +
-    '- Reacting to stream inviting discussion\n\n' +
+    '- Reacting to stream inviting discussion\n' +
+    '- STATEMENTS ABOUT THE STREAMER (criticism, observations, jokes about their driving)\n' +
+    '- Observations that invite response ("you always miss exits", "your truck setup is", "that was sick")\n\n' +
     'needsReply = false for:\n' +
     '- Pure emotes/emoji only\n' +
     '- Single word hype: GG, pog, lol, nice, wow\n' +
